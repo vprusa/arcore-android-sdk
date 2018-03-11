@@ -16,6 +16,7 @@
 
 package com.google.ar.core.examples.java.helloar;
 
+import android.content.Context;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
@@ -46,15 +47,25 @@ import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer.BlendMode;
 import com.google.ar.core.examples.java.helloar.rendering.PlaneRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.PointCloudRenderer;
+import com.google.ar.core.examples.java.helloar.rendering.PickingRay;
+import com.google.ar.core.examples.java.helloar.rendering.Vector3f;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import de.javagl.obj.Obj;
+import de.javagl.obj.ObjData;
+import de.javagl.obj.ObjReader;
+import de.javagl.obj.ObjUtils;
 
 /**
  * This is a simple example that shows how to create an augmented reality (AR) application using the
@@ -270,6 +281,137 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
     GLES20.glViewport(0, 0, width, height);
   }
 
+  public void rayPicking(float x, float y, Camera camera, int program, Context context)
+      throws IOException {
+
+    //x = getMouseX() // scalar
+    //y = getMouseY() // scalar
+
+    InputStream objInputStream = context.getAssets().open("andy.obj");
+    Obj obj = ObjReader.read(objInputStream);
+
+    // Prepare the Obj so that its structure is suitable for
+    // rendering with OpenGL:
+    // 1. Triangulate it
+    // 2. Make sure that texture coordinates are not ambiguous
+    // 3. Make sure that normals are not ambiguous
+    // 4. Convert it to single-indexed data
+    obj = ObjUtils.convertToRenderable(obj);
+
+    // OpenGL does not use Java arrays. ByteBuffers are used instead to provide data in a format
+    // that OpenGL understands.
+
+    // Obtain the data from the OBJ, as direct buffers:
+    //IntBuffer wideIndices = ObjData.getFaceVertexIndices(obj, 3);
+    FloatBuffer vertices = ObjData.getVertices(obj);
+    //FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
+   // FloatBuffer normals = ObjData.getNormals(obj);
+
+
+
+    Vector3f cameraLookAt = new Vector3f(camera.getDisplayOrientedPose());
+    Vector3f cameraPosition = new Vector3f(camera.getPose());
+    Vector3f view = cameraLookAt.sub(cameraPosition); // 3D float vector
+    view.normalize();
+    Vector3f h;
+
+    h = view.cross(new Vector3f(camera.getDisplayOrientedPose().getZAxis()));// ) // 3D float vector
+    h.normalize();
+
+    Vector3f v;
+
+    v = h.cross(view); // 3D float vector
+    v.normalize();
+    //GLES20.glDepth
+
+    float[] viewPort= new float[4];
+
+    GLES20.glGetUniformfv(program,  GLES20.GL_VIEWPORT, viewPort,0);
+    float width = viewPort[2];
+    float height = viewPort[3];
+
+    float nearClippingPlaneDistance = 0.0f;
+    // convert fovy to radians
+    float rad = 90 * (float)Math.PI / 180;
+    float vLength = (float)Math.tan((double) (rad / 2.0f)  ) * nearClippingPlaneDistance;
+    float hLength = vLength * (width / height);
+    v.scale(vLength);
+    h.scale(hLength);
+    //scale v by vLength
+    //scale h by hLength
+
+    // translate mouse coordinates so that the origin lies in the center
+    // of the view port
+    x -= width / 2;
+    y -= height / 2;
+
+    // scale mouse coordinates so that half the view port width and height
+    // becomes 1
+    y /= (height / 2);
+    x /= (width / 2);
+
+    Vector3f cameraPos = cameraPosition;
+    // linear combination to compute intersection of picking ray with
+    // view port plane
+    Vector3f pos = cameraPos.sum(view.mul(nearClippingPlaneDistance).sum(h.mul(x).sum(v.mul(y))));
+
+// compute direction of picking ray by subtracting intersection point
+// with camera position
+    Vector3f dir = pos.sub(cameraPos);
+
+
+    // brute force
+    //for all objects in the scene
+    //test for intersection and keep closest
+    //end for
+
+    PickingRay pr = new PickingRay(pos, dir);
+    pr.intersectionWithXyPlane(worldPos);
+
+  }
+
+  public void picking(float screenX, float screenY, PickingRay pickingRay, Camera camera, int program)
+  {
+    //Vector3f position = new Vector3f(camera.getPose().tx(), camera.getPose().ty(), camera.getPose().tz());
+    //Vector3f view = new Vector3f((float)View.getLocationOnScreen()[0], (float)View.getLocationOnScreen()[1], 0.0f);
+
+    float[] viewMatrix= new float[16];
+
+    float[] viewPort= new float[16];
+
+    camera.getViewMatrix(viewMatrix,0);
+
+    Vector3f view  = new Vector3f(viewMatrix[ 2 ],viewMatrix[ 6 ],viewMatrix[ 10 ]);
+    float[] positionMatrix= new float[16];
+
+    //camera.getDisplayOrientedPose().ViewMatrix(viewMatrix,0);
+    Vector3f position  = new Vector3f(camera.getDisplayOrientedPose().tx(),camera.getDisplayOrientedPose().ty(),camera.getDisplayOrientedPose().tz());
+
+    pickingRay.getClickPosInWorld().set(position);
+    pickingRay.getClickPosInWorld().add(view);
+
+    GLES20.glGetUniformfv(program,  GLES20.GL_VIEWPORT, viewPort,0);
+    float viewportHeight = viewPort[2];
+    float viewportWidth = viewPort[3];
+    //camera.getViewMatrix();
+    screenX -= (float)viewportWidth/2f;
+    screenY -= (float)viewportHeight/2f;
+
+    // normalize to 1
+    screenX /= ((float)viewportWidth/2f);
+    screenY /= ((float)viewportHeight/2f);
+
+    Vector3f screenHoritzontally = new Vector3f(1.0f,1.0f,1.0f);
+    Vector3f screenVertically = new Vector3f(1.0f,1.0f,1.0f);
+
+    pickingRay.getClickPosInWorld().x += screenHoritzontally.x*screenX + screenVertically.x*screenY;
+    pickingRay.getClickPosInWorld().y += screenHoritzontally.y*screenX + screenVertically.y*screenY;
+    pickingRay.getClickPosInWorld().z += screenHoritzontally.z*screenX + screenVertically.z*screenY;
+
+    pickingRay.getDirection().set(pickingRay.getClickPosInWorld());
+    pickingRay.getDirection().sub(position);
+  }
+
   @Override
   public void onDrawFrame(GL10 gl) {
     // Clear screen to notify driver it should not load any pixels from previous frame.
@@ -295,6 +437,26 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
       // compared to frame rate.
 
       MotionEvent tap = queuedSingleTaps.poll();
+
+    /*
+      // look direction
+      view.subAndAssign(lookAt, position).normalize();
+
+      // screenX
+      screenHoritzontally.crossAndAssign(view, up).normalize();
+
+      // screenY
+      screenVertically.crossAndAssign(screenHoritzontally, view).normalize();
+
+      final float radians = (float) (viewAngle*Math.PI / 180f);
+      float halfHeight = (float) (Math.tan(radians/2)*nearClippingPlaneDistance);
+      float halfScaledAspectRatio = halfHeight*getViewportAspectRatio();
+
+      screenVertically.scale(halfHeight);
+      screenHoritzontally.scale(halfScaledAspectRatio);
+  */
+
+
       if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
         for (HitResult hit : frame.hitTest(tap)) {
           // Check if any plane was hit, and if it was hit inside the plane polygon
@@ -314,7 +476,11 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // Adding an Anchor tells ARCore that it should track this position in
             // space. This anchor is created on the Plane to place the 3D model
             // in the correct position relative both to the world and to the plane.
-            anchors.add(hit.createAnchor());
+            Anchor newAnchor = hit.createAnchor();
+            rayPicking
+                    newAnchor.getPose()
+
+            anchors.add(newAnchor);
             break;
           }
         }
