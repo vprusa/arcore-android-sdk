@@ -16,7 +16,7 @@ package com.google.ar.core.examples.java.helloar.rendering;
 
 import android.content.Context;
 import android.opengl.GLES20;
-import android.opengl.Matrix;
+import android.opengl.Matrix; 
 
 import com.google.ar.core.examples.java.helloar.R;
 
@@ -78,7 +78,7 @@ public class MaskRenderer {
   // Shader location: object attributes.
   private int positionAttribute;
 
-  private int code;
+  private int colorUniform;
 
   //private int normalAttribute;
   //private int texCoordAttribute;
@@ -250,7 +250,11 @@ public class MaskRenderer {
     modelViewUniform = GLES20.glGetUniformLocation(program, "u_ModelView");
     modelViewProjectionUniform = GLES20.glGetUniformLocation(program, "u_ModelViewProjection");
 
-    code = GLES20.glGetAttribLocation(program, "u_code");
+    colorUniform = GLES20.glGetUniformLocation(program, "u_code");
+
+    if (colorUniform != -1) {
+      GLES20.glUniform1f(colorUniform, 0.0f);
+    }
     positionAttribute = GLES20.glGetAttribLocation(program, "a_Position");
     //normalAttribute = GLES20.glGetAttribLocation(program, "a_Normal");
     //texCoordAttribute = GLES20.glGetAttribLocation(program, "a_TexCoord");
@@ -371,7 +375,8 @@ public class MaskRenderer {
     GLES20.glUniformMatrix4fv(modelViewProjectionUniform, 1, false, modelViewProjectionMatrix, 0);
     ShaderUtil.checkGLError(TAG, "1");
     float tmpF = ((float)((objectId/20.0)));
-    GLES20.glUniform1f(code,tmpF);
+    GLES20.glUniform1f(colorUniform,tmpF);
+
    //
     ShaderUtil.checkGLError(TAG, "1");
     // Enable vertex arrays

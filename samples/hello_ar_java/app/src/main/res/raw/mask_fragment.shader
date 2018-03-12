@@ -17,18 +17,7 @@ precision mediump float;
 
 uniform float u_code;
 
-//out vec4 outputF;
-
-//input from the vertex
-//in float u_code_out;
-
-//output to the framebuffer
-//out float u_code_out_out;
-
-
 void main()
 {
-    //outputF = vec4(code/20, 0, 0, 0);
-    //float tmp = (u_code / 255.0);
     gl_FragColor = vec4(u_code, 0, 0, 0);
 }

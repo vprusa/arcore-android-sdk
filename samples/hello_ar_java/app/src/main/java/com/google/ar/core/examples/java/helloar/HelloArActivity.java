@@ -89,6 +89,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
   private final ArrayBlockingQueue<MotionEvent> queuedSingleTaps = new ArrayBlockingQueue<>(16);
   private final ArrayList<AnchorData> anchors = new ArrayList<>();
 
+  private int anchorIndex = 0;
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -319,7 +321,10 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // space. This anchor is created on the Plane to place the 3D model
             // in the correct position relative both to the world and to the plane.
             Anchor newAnchor = hit.createAnchor();
-            anchors.add(new AnchorData(newAnchor, anchors.size()));
+            anchorIndex++;
+            if(anchorIndex >= 20)
+              anchorIndex=1;
+            anchors.add(new AnchorData(newAnchor,anchorIndex));
             break;
           }
         }
