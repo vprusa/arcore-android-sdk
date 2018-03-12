@@ -42,6 +42,7 @@ import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
 import com.google.ar.core.examples.java.helloar.rendering.BackgroundRenderer;
+import com.google.ar.core.examples.java.helloar.rendering.MaskRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer.BlendMode;
 import com.google.ar.core.examples.java.helloar.rendering.PlaneRenderer;
@@ -248,7 +249,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
     // Prepare the other rendering objects.
     try {
       virtualObject.createOnGlThread(/*context=*/ this, "andy.obj", "andy.png");
-      virtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+      //virtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
       virtualObjectShadow.createOnGlThread(/*context=*/ this, "andy_shadow.obj", "andy_shadow.png");
       virtualObjectShadow.setBlendMode(BlendMode.Shadow);
