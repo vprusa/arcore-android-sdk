@@ -13,3 +13,8 @@ This can be done by displaying a prominent link to the site
 "How Google uses data when you use our partners' sites or apps",
 (located at www.google.com/policies/privacy/partners/, or any other URL Google
 may provide from time to time).
+
+
+### Changes (only hello_ar_java)
+Added switchable object (Andy) using offscreen rendering as color mask.
+This can be used for interaction with objects.

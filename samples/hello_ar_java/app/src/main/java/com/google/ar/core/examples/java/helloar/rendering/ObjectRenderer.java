@@ -20,11 +20,9 @@ import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
+
 import com.google.ar.core.examples.java.helloar.R;
-import de.javagl.obj.Obj;
-import de.javagl.obj.ObjData;
-import de.javagl.obj.ObjReader;
-import de.javagl.obj.ObjUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -32,6 +30,11 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+
+import de.javagl.obj.Obj;
+import de.javagl.obj.ObjData;
+import de.javagl.obj.ObjReader;
+import de.javagl.obj.ObjUtils;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class ObjectRenderer {
@@ -232,7 +235,7 @@ public class ObjectRenderer {
    *
    * @param modelMatrix A 4x4 model-to-world transformation matrix, stored in column-major order.
    * @param scaleFactor A separate scaling factor to apply before the {@code modelMatrix}.
-   * @see android.opengl.Matrix
+   * @see Matrix
    */
   public void updateModelMatrix(float[] modelMatrix, float scaleFactor) {
     float[] scaleMatrix = new float[16];
@@ -270,7 +273,7 @@ public class ObjectRenderer {
    * @see #setBlendMode(BlendMode)
    * @see #updateModelMatrix(float[], float)
    * @see #setMaterialProperties(float, float, float, float)
-   * @see android.opengl.Matrix
+   * @see Matrix
    */
   public void draw(float[] cameraView, float[] cameraPerspective, float lightIntensity) {
 
