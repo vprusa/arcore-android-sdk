@@ -77,7 +77,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
   private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
   private final ObjectRenderer virtualObject = new ObjectRenderer();
-  private final ObjectRenderer virtualObjectShadow = new ObjectRenderer();
+  private final MaskRenderer maskObject = new MaskRenderer();
+  //private final ObjectRenderer virtualObjectShadow = new ObjectRenderer();
   private final PlaneRenderer planeRenderer = new PlaneRenderer();
   private final PointCloudRenderer pointCloud = new PointCloudRenderer();
 
@@ -86,7 +87,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
   // Tap handling and UI.
   private final ArrayBlockingQueue<MotionEvent> queuedSingleTaps = new ArrayBlockingQueue<>(16);
-  private final ArrayList<Anchor> anchors = new ArrayList<>();
+  private final ArrayList<AnchorData> anchors = new ArrayList<>();
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -248,12 +249,14 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
     // Prepare the other rendering objects.
     try {
-      virtualObject.createOnGlThread(/*context=*/ this, "andy.obj", "andy.png");
+      //virtualObject.createOnGlThread( this, "andy.obj", "andy.png");
+      maskObject.createOnGlThread( this, "andy.obj", "andy.png");
+
       //virtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
-      virtualObjectShadow.createOnGlThread(/*context=*/ this, "andy_shadow.obj", "andy_shadow.png");
-      virtualObjectShadow.setBlendMode(BlendMode.Shadow);
-      virtualObjectShadow.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
+      //virtualObjectShadow.createOnGlThread( this, "andy_shadow.obj", "andy_shadow.png");
+      //virtualObjectShadow.setBlendMode(BlendMode.Shadow);
+      //virtualObjectShadow.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
     } catch (IOException e) {
       Log.e(TAG, "Failed to read obj file");
     }
@@ -309,13 +312,14 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // Cap the number of objects created. This avoids overloading both the
             // rendering system and ARCore.
             if (anchors.size() >= 20) {
-              anchors.get(0).detach();
+              anchors.get(0).anchor.detach();
               anchors.remove(0);
             }
             // Adding an Anchor tells ARCore that it should track this position in
             // space. This anchor is created on the Plane to place the 3D model
             // in the correct position relative both to the world and to the plane.
-            anchors.add(hit.createAnchor());
+            Anchor newAnchor = hit.createAnchor();
+            anchors.add(new AnchorData(newAnchor, anchors.size()));
             break;
           }
         }
@@ -366,7 +370,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
       // Visualize anchors created by touch.
       float scaleFactor = 1.0f;
-      for (Anchor anchor : anchors) {
+      for (AnchorData anchorData : anchors) {
+        Anchor anchor = anchorData.anchor;
         if (anchor.getTrackingState() != TrackingState.TRACKING) {
           continue;
         }
@@ -375,10 +380,14 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         anchor.getPose().toMatrix(anchorMatrix, 0);
 
         // Update and draw the model and its shadow.
-        virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-        virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
-        virtualObject.draw(viewmtx, projmtx, lightIntensity);
-        virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
+       // virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+        maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
+
+        //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+       // virtualObject.draw(viewmtx, projmtx, lightIntensity);
+        maskObject.draw(viewmtx, projmtx, anchorData.index);
+
+        //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
       }
 
     } catch (Throwable t) {
