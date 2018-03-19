@@ -14,16 +14,29 @@
  */
 package com.google.ar.core.examples.java.helloar.rendering;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.opengl.GLES20;
-import android.opengl.Matrix; 
+import android.opengl.Matrix;
+import android.os.Build;
+import android.os.Environment;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.util.Log;
 
+import com.google.ar.core.examples.java.helloar.HelloArActivity;
 import com.google.ar.core.examples.java.helloar.R;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.CharBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
@@ -98,6 +111,11 @@ public class MaskRenderer {
   private final float[] modelMatrix = new float[16];
   private final float[] modelViewMatrix = new float[16];
   private final float[] modelViewProjectionMatrix = new float[16];
+
+
+  //Somewhere at initialization
+  int [] fbo = new int[1];
+  int [] render_buf = new int[1];
 
   // Set some default material properties to use for lighting.
   /*private float ambient = 0.3f;
@@ -232,6 +250,31 @@ public class MaskRenderer {
     ShaderUtil.checkGLError(TAG, "load render stencil buffers");
 
 
+
+    GLES20.glGenFramebuffers(1,fbo,0);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glGenRenderbuffers(1,render_buf, 0);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, render_buf[0]);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    //GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_BGRA8 ,m_viewport[2], m_viewport[3]);
+    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_RGBA4,m_viewport[2], m_viewport[3]);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,fbo[0]);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glFramebufferRenderbuffer(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_RENDERBUFFER, render_buf[0]);
+
+    ShaderUtil.checkGLError(TAG, "4");
+//At deinit:
+    //glDeleteFramebuffers(1,&fbo);
+    //glDeleteRenderbuffers(1,&render_buf);
+
+
     ShaderUtil.checkGLError(TAG, "OBJ buffer load");
 
     final int vertexShader =
@@ -319,12 +362,13 @@ public class MaskRenderer {
    * @param cameraView A 4x4 view matrix, in column-major order.
    * @param cameraPerspective A 4x4 projection matrix, in column-major order.
    *     properties.
+   * @ param helloArActivity
    * @see # setBlendMode(BlendMode)
    * @see #updateModelMatrix(float[], float)
    * @see # setMaterialProperties(float, float, float, float)
    * @see Matrix
    */
-  public void draw(float[] cameraView, float[] cameraPerspective, int objectId) {
+  public void draw(float[] cameraView, float[] cameraPerspective, int objectId, HelloArActivity context) {
 
     ShaderUtil.checkGLError(TAG, "Before draw");
 
@@ -411,10 +455,98 @@ public class MaskRenderer {
     //GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, renderbufferId);
     ShaderUtil.checkGLError(TAG, "3");
 
-    GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
+    int [] m_viewport = new int[4];
+    GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, m_viewport, 0 );
+    int width = m_viewport[2];
+    int height = m_viewport[3];
 
     ShaderUtil.checkGLError(TAG, "4");
+//Before drawing
+    GLES20.glBindFramebuffer( GLES20.GL_FRAMEBUFFER,fbo[0]);
+//after drawing
+    ShaderUtil.checkGLError(TAG, "4");
+
+
+
+    //GLES20.glEnable(GLES20.GL_BLEND);
+    //GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+
+
+    // Start by clearing the alpha channel of the color buffer to 1.0.
+    //GLES20.glClearColor(1, 1, 1, 1);
+    //GLES20.glColorMask(false, false, false, true);
+    //GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+    //GLES20.glColorMask(false, true, true, true);
+    GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
+    GLES20.glDisable(GLES20.GL_BLEND);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    //GLES20.std::vector<std::uint8_t> data(width*height*4);
+    //GLES20.glReadBuffer( GLES20.GL_COLOR_ATTACHMENT0);
+    //byte [] data = new byte[width*height*4];
+   /* Buffer data = CharBuffer.allocate(width*height*4);
+
+    ShaderUtil.checkGLError(TAG, "4");
+    // https://stackoverflow.com/questions/20606295/when-using-gles20-glreadpixels-on-android-the-data-returned-by-it-is-not-exactl
+    int b[]=new int[width*height];
+    int bt[]=new int[width*height*4];
+    IntBuffer ib = IntBuffer.wrap(b);
+    ib.position(0);
+
+    GLES20.glReadPixels(0,0,width,height, GLES20.GL_RGBA4, GLES20.GL_UNSIGNED_BYTE,ib);
+// Return to onscreen rendering:
+
+*/
+  // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
+    ByteBuffer buffer = ByteBuffer.allocateDirect(width*height * 4);
+    GLES20.glReadPixels(0, 0, width,height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer);
+    ShaderUtil.checkGLError(TAG, "4");
+
+    Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+    ShaderUtil.checkGLError(TAG, "4");
+
+    bmp.copyPixelsFromBuffer(buffer);
+    ShaderUtil.checkGLError(TAG, "4");
+
+    if (Build.VERSION.SDK_INT >= 23) {
+      int permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+      if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+        ActivityCompat.requestPermissions(context, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+      }
+    }
+
+    FileOutputStream out = null;
+    try {
+
+      File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+      String fname = "TestBitmap.jpg";
+      //File file = new File(path, "/" + fname);
+      File file = new File(path, "/" + fname);
+
+      Log.i("image", file .getAbsolutePath());
+
+      out = new FileOutputStream(file);
+      bmp.compress(Bitmap.CompressFormat.JPEG, 100, out); // bmp is your Bitmap instance
+      // PNG is a lossless format, the compression factor (100) is ignored
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      try {
+        if (out != null) {
+          out.close();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+
+
+
+    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
     GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+
     ShaderUtil.checkGLError(TAG, "5");
     /*if (blendMode != null) {
       GLES20.glDisable(GLES20.GL_BLEND);

@@ -330,6 +330,41 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         }
       }
 
+
+      // TODO refactor this and MaskRenderer classes, switch saved image by x-axis, bring back original renderer, use mask for buttons, add readme notes, squash
+      // actually useful working examples with explanation how to render offscreen,
+      // https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
+      // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
+      // Get projection matrix.
+      float[] projmtx = new float[16];
+      camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
+
+      // Get camera matrix and draw.
+      float[] viewmtx = new float[16];
+      camera.getViewMatrix(viewmtx, 0);
+
+      // Visualize anchors created by touch.
+      float scaleFactor = 1.0f;
+      for (AnchorData anchorData : anchors) {
+        Anchor anchor = anchorData.anchor;
+        if (anchor.getTrackingState() != TrackingState.TRACKING) {
+          continue;
+        }
+        // Get the current pose of an Anchor in world space. The Anchor pose is updated
+        // during calls to session.update() as ARCore refines its estimate of the world.
+        anchor.getPose().toMatrix(anchorMatrix, 0);
+
+        // Update and draw the model and its shadow.
+        // virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+        maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
+
+        //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+        // virtualObject.draw(viewmtx, projmtx, lightIntensity);
+        maskObject.draw(viewmtx, projmtx, anchorData.index, this);
+
+        //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
+      }
+
       // Draw background.
       backgroundRenderer.draw(frame);
 
@@ -338,13 +373,6 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         return;
       }
 
-      // Get projection matrix.
-      float[] projmtx = new float[16];
-      camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
-
-      // Get camera matrix and draw.
-      float[] viewmtx = new float[16];
-      camera.getViewMatrix(viewmtx, 0);
 
       // Compute lighting from average intensity of the image.
       final float lightIntensity = frame.getLightEstimate().getPixelIntensity();
@@ -373,27 +401,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
       planeRenderer.drawPlanes(
           session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
-      // Visualize anchors created by touch.
-      float scaleFactor = 1.0f;
-      for (AnchorData anchorData : anchors) {
-        Anchor anchor = anchorData.anchor;
-        if (anchor.getTrackingState() != TrackingState.TRACKING) {
-          continue;
-        }
-        // Get the current pose of an Anchor in world space. The Anchor pose is updated
-        // during calls to session.update() as ARCore refines its estimate of the world.
-        anchor.getPose().toMatrix(anchorMatrix, 0);
 
-        // Update and draw the model and its shadow.
-       // virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-        maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
-
-        //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
-       // virtualObject.draw(viewmtx, projmtx, lightIntensity);
-        maskObject.draw(viewmtx, projmtx, anchorData.index);
-
-        //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
-      }
 
     } catch (Throwable t) {
       // Avoid crashing the application due to unhandled exceptions.
