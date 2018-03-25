@@ -251,10 +251,10 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
     // Prepare the other rendering objects.
     try {
-      //virtualObject.createOnGlThread( this, "andy.obj", "andy.png");
-      maskObject.createOnGlThread( this, "andy.obj", "andy.png");
+      virtualObject.createOnGlThread( this, "andy.obj", "andy.png");
+      maskObject.createOnGlThread( this, "andy.obj");
 
-      //virtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+      virtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
       //virtualObjectShadow.createOnGlThread( this, "andy_shadow.obj", "andy_shadow.png");
       //virtualObjectShadow.setBlendMode(BlendMode.Shadow);
@@ -300,6 +300,44 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
       // Handle taps. Handling only one tap per frame, as taps are usually low frequency
       // compared to frame rate.
 
+
+
+        // TODO refactor this and MaskRenderer classes, switch saved image by x-axis, bring back original renderer, use mask for buttons, add readme notes, squash
+        // actually useful working examples with explanation how to render offscreen,
+        // https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
+        // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
+        // Get projection matrix.
+        float[] projmtx = new float[16];
+        camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
+
+        // Get camera matrix and draw.
+        float[] viewmtx = new float[16];
+        camera.getViewMatrix(viewmtx, 0);
+
+        // Visualize anchors created by touch.
+        float scaleFactor = 1.0f;
+        for (AnchorData anchorData : anchors) {
+            Anchor anchor = anchorData.anchor;
+            if (anchor.getTrackingState() != TrackingState.TRACKING) {
+                continue;
+            }
+            // Get the current pose of an Anchor in world space. The Anchor pose is updated
+            // during calls to session.update() as ARCore refines its estimate of the world.
+            anchor.getPose().toMatrix(anchorMatrix, 0);
+
+            // Update and draw the model and its shadow.
+            // virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+            maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
+
+            //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+            // virtualObject.draw(viewmtx, projmtx, lightIntensity);
+            maskObject.draw(viewmtx, projmtx, anchorData.index);
+
+            //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
+        }
+      //maskObject.loadMaskBuffer(viewmtx, projmtx);
+      maskObject.loadMaskBuffer();
+
       MotionEvent tap = queuedSingleTaps.poll();
       if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
         for (HitResult hit : frame.hitTest(tap)) {
@@ -313,56 +351,37 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // Hits are sorted by depth. Consider only closest hit on a plane or oriented point.
             // Cap the number of objects created. This avoids overloading both the
             // rendering system and ARCore.
-            if (anchors.size() >= 20) {
-              anchors.get(0).anchor.detach();
-              anchors.remove(0);
+
+            float tapX = tap.getX();
+            float tapY = tap.getY();
+            AnchorData selected = maskObject.pickAnchorData(anchors,tapX, tapY );
+
+            if(selected == null) {
+
+              if (anchors.size() >= 20) {
+                anchors.get(0).anchor.detach();
+                anchors.remove(0);
+              }
+              // Adding an Anchor tells ARCore that it should track this position in
+              // space. This anchor is created on the Plane to place the 3D model
+              // in the correct position relative both to the world and to the plane.
+              Anchor newAnchor = hit.createAnchor();
+              if (anchorIndex >= 19)
+                anchorIndex = 0;
+              anchors.add(new AnchorData(newAnchor, anchorIndex));
+              anchorIndex++;
+            }else{
+              Log.i(TAG, "Removing andy with index/ID: " + selected.index);
+              for(AnchorData anchorData : anchors){
+                if(anchorData.index == selected.index){
+                  anchors.remove(anchorData);
+                  break;
+                }
+              }
             }
-            // Adding an Anchor tells ARCore that it should track this position in
-            // space. This anchor is created on the Plane to place the 3D model
-            // in the correct position relative both to the world and to the plane.
-            Anchor newAnchor = hit.createAnchor();
-            anchorIndex++;
-            if(anchorIndex >= 20)
-              anchorIndex=1;
-            anchors.add(new AnchorData(newAnchor,anchorIndex));
             break;
           }
         }
-      }
-
-
-      // TODO refactor this and MaskRenderer classes, switch saved image by x-axis, bring back original renderer, use mask for buttons, add readme notes, squash
-      // actually useful working examples with explanation how to render offscreen,
-      // https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
-      // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
-      // Get projection matrix.
-      float[] projmtx = new float[16];
-      camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
-
-      // Get camera matrix and draw.
-      float[] viewmtx = new float[16];
-      camera.getViewMatrix(viewmtx, 0);
-
-      // Visualize anchors created by touch.
-      float scaleFactor = 1.0f;
-      for (AnchorData anchorData : anchors) {
-        Anchor anchor = anchorData.anchor;
-        if (anchor.getTrackingState() != TrackingState.TRACKING) {
-          continue;
-        }
-        // Get the current pose of an Anchor in world space. The Anchor pose is updated
-        // during calls to session.update() as ARCore refines its estimate of the world.
-        anchor.getPose().toMatrix(anchorMatrix, 0);
-
-        // Update and draw the model and its shadow.
-        // virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-        maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
-
-        //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
-        // virtualObject.draw(viewmtx, projmtx, lightIntensity);
-        maskObject.draw(viewmtx, projmtx, anchorData.index, this);
-
-        //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
       }
 
       // Draw background.
@@ -402,7 +421,43 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
           session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
 
+        // Visualize anchors created by touch.
+        for (AnchorData anchorData : anchors) {
+            Anchor anchor = anchorData.anchor;
+            if (anchor.getTrackingState() != TrackingState.TRACKING) {
+                continue;
+            }
+            // Get the current pose of an Anchor in world space. The Anchor pose is updated
+            // during calls to session.update() as ARCore refines its estimate of the world.
+            anchor.getPose().toMatrix(anchorMatrix, 0);
 
+            // Update and draw the model and its shadow.
+            virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+            virtualObject.draw(viewmtx, projmtx, lightIntensity);
+        }
+
+      /*
+
+      for (AnchorData anchorData : anchors) {
+        Anchor anchor = anchorData.anchor;
+        if (anchor.getTrackingState() != TrackingState.TRACKING) {
+          continue;
+        }
+        // Get the current pose of an Anchor in world space. The Anchor pose is updated
+        // during calls to session.update() as ARCore refines its estimate of the world.
+        anchor.getPose().toMatrix(anchorMatrix, 0);
+
+        // Update and draw the model and its shadow.
+        virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+        //maskObject.updateModelMatrix(anchorMatrix, scaleFactor);
+
+        //virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
+        virtualObject.draw(viewmtx, projmtx, lightIntensity);
+        //maskObject.draw(viewmtx, projmtx, anchorData.index, this);
+
+        //virtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
+      }
+*/
     } catch (Throwable t) {
       // Avoid crashing the application due to unhandled exceptions.
       Log.e(TAG, "Exception on the OpenGL thread", t);

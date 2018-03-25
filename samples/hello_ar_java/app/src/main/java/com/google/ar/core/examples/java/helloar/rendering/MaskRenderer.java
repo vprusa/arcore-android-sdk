@@ -14,32 +14,21 @@
  */
 package com.google.ar.core.examples.java.helloar.rendering;
 
-import android.Manifest;
 import android.content.Context;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
-import android.os.Build;
-import android.os.Environment;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.util.Log;
 
-import com.google.ar.core.examples.java.helloar.HelloArActivity;
+import com.google.ar.core.examples.java.helloar.AnchorData;
 import com.google.ar.core.examples.java.helloar.R;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.CharBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
 
 import de.javagl.obj.Obj;
 import de.javagl.obj.ObjData;
@@ -48,32 +37,15 @@ import de.javagl.obj.ObjUtils;
 
 /** Renders an object loaded from an OBJ file in OpenGL. */
 public class MaskRenderer {
+
+  private static final float MAX_MASKED_OBJECTS = 255.0f;
   private static final String TAG = MaskRenderer.class.getSimpleName();
 
-  /**
-   * Blend mode.
-   *
-   * @see # setBlendMode(BlendMode)
-   */
-  /*
-  public enum BlendMode {
-    // Multiplies the destination color by the source alpha.
-    Shadow,
-    // Normal alpha blending.
-    Grid
-  }
-*/
   private static final int COORDS_PER_VERTEX = 3;
-
-  // Note: the last component must be zero to avoid applying the translational part of the matrix.
-  //private static final float[] LIGHT_DIRECTION = new float[] {0.250f, 0.866f, 0.433f, 0.0f};
-  //private final float[] viewLightDirection = new float[4];
 
   // Object vertex buffer variables.
   private int vertexBufferId;
   private int verticesBaseAddress;
-  //private int texCoordsBaseAddress;
-  //private int normalsBaseAddress;
   private int indexBufferId;
   private int indexCount;
 
@@ -82,7 +54,6 @@ public class MaskRenderer {
   private int renderStencilbufferId;
 
   private int program;
-  //private final int[] textures = new int[1];
 
   // Shader location: model view projection matrix.
   private int modelViewUniform;
@@ -93,61 +64,70 @@ public class MaskRenderer {
 
   private int colorUniform;
 
-  //private int normalAttribute;
-  //private int texCoordAttribute;
-
-  // Shader location: texture sampler.
-  //private int textureUniform;
-
-  // Shader location: environment properties.
- // private int lightingParametersUniform;
-
-  // Shader location: material properties.
-  //private int materialParametersUniform;
-
-  //private BlendMode blendMode = null;
-
   // Temporary matrices allocated here to reduce number of allocations for each frame.
   private final float[] modelMatrix = new float[16];
   private final float[] modelViewMatrix = new float[16];
   private final float[] modelViewProjectionMatrix = new float[16];
-
+    ByteBuffer resultsBuffer;
 
   //Somewhere at initialization
   int [] fbo = new int[1];
   int [] render_buf = new int[1];
 
-  // Set some default material properties to use for lighting.
-  /*private float ambient = 0.3f;
-  private float diffuse = 1.0f;
-  private float specular = 1.0f;
-  private float specularPower = 6.0f;
-*/
+  int width= -1;
+  int height = -1;
+
   public MaskRenderer() {}
 
-  /**
+  void loadViewport(){
+      if(width == -1 || height == -1) {
+          int[] m_viewport = new int[4];
+          GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, m_viewport, 0);
+          width = m_viewport[2];
+          height = m_viewport[3];
+      }
+  }
+
+    public AnchorData pickAnchorData(ArrayList<AnchorData> anchors, float f_x, float f_y) {
+    int x = (int) f_x;
+    int y = (int) f_y;
+        if(resultsBuffer != null && anchors != null && anchors.size() != 0 && resultsBuffer.array() != null && resultsBuffer.array().length != 0 ){
+            loadViewport();
+
+            byte[] barr = ((ByteBuffer)resultsBuffer).array();
+            byte colorR = barr[( width *  height * 4  ) - (width * 4 * y + (width - x )*4)];
+            /*
+            byte colorG = barr[( width *  height * 4  ) - (width * 4 * y + (width - x )*4) + 1];
+            byte colorB = barr[( width *  height * 4  ) - (width * 4 * y + (width - x )*4) + 2];
+            byte colorA = barr[( width *  height * 4  ) - (width * 4 * y + (width - x )*4) + 3];
+
+          Log.i("colorR",""+colorR);
+          Log.i("colorG",""+colorG);
+          Log.i("colorB",""+colorB);
+          Log.i("colorA",""+colorA);
+          */
+          // no need to convert because that is how we store it in byte buffer...
+          //int objectId = ((int)(colorR/MAX_MASKED_OBJECTS));
+          int objectId = colorR;
+            for(AnchorData anchor : anchors){
+                if(anchor.index == objectId){
+                    return anchor;
+                }
+            }
+        }
+        return null;
+    }
+
+
+    /**
    * Creates and initializes OpenGL resources needed for rendering the model.
    *
    * @param context Context for loading the shader and below-named model and texture assets.
    * @param objAssetName Name of the OBJ file containing the model geometry.
-   * @param diffuseTextureAssetName Name of the PNG file containing the diffuse texture map.
    */
-  public void createOnGlThread(Context context, String objAssetName, String diffuseTextureAssetName)
+  public void createOnGlThread(Context context, String objAssetName)
       throws IOException {
     // Read the texture.
-    //Bitmap textureBitmap = BitmapFactory.decodeStream(context.getAssets().open(diffuseTextureAssetName));
-
-    //GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    //GLES20.glGenTextures(textures.length, textures, 0);
-    //GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
-
-    //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
-    //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-    //GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, textureBitmap, 0);
-    //GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
-    //GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-
-    //textureBitmap.recycle();
 
     ShaderUtil.checkGLError(TAG, "Texture loading");
 
@@ -169,8 +149,6 @@ public class MaskRenderer {
     // Obtain the data from the OBJ, as direct buffers:
     IntBuffer wideIndices = ObjData.getFaceVertexIndices(obj, 3);
     FloatBuffer vertices = ObjData.getVertices(obj);
-    //FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
-    //FloatBuffer normals = ObjData.getNormals(obj);
 
     // Convert int indices to shorts for GL ES 2.0 compatibility
     ShortBuffer indices =
@@ -189,16 +167,11 @@ public class MaskRenderer {
 
     // Load vertex buffer
     verticesBaseAddress = 0;
-    //texCoordsBaseAddress = verticesBaseAddress + 4 * vertices.limit();
-    //normalsBaseAddress = texCoordsBaseAddress + 4 * texCoords.limit();
-   // final int totalBytes = normalsBaseAddress + 4 * normals.limit();
     final int totalBytes = 4 * vertices.limit();
 
     GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
     GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, totalBytes, null, GLES20.GL_STATIC_DRAW);
     GLES20.glBufferSubData(GLES20.GL_ARRAY_BUFFER, verticesBaseAddress, 4 * vertices.limit(), vertices);
-    //GLES20.glBufferSubData(GLES20.GL_ARRAY_BUFFER, texCoordsBaseAddress, 4 * texCoords.limit(), texCoords);
-    //GLES20.glBufferSubData(GLES20.GL_ARRAY_BUFFER, normalsBaseAddress, 4 * normals.limit(), normals);
     GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
 
     // Load index buffer
@@ -215,23 +188,15 @@ public class MaskRenderer {
 
     ShaderUtil.checkGLError(TAG, "gen frame buffer");
 
-    int [] m_viewport = new int[4];
-    GLES20.glGetIntegerv( GLES20.GL_VIEWPORT, m_viewport, 0 );
+    loadViewport();
 
     final int[] renderColorbuffer = new int[1];
     GLES20.glGenRenderbuffers(1, renderColorbuffer, 0);
     renderColorbufferId = renderColorbuffer[0];
-    ShaderUtil.checkGLError(TAG, "load render color buffers0");
-
     GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, renderColorbufferId);
-    ShaderUtil.checkGLError(TAG, "load render color buffers1");
-
-    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_RGBA4, m_viewport[2], m_viewport[3]);
-    ShaderUtil.checkGLError(TAG, "load render color buffers2");
-
+    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_RGBA4, width, height);
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebufferId);
     GLES20.glFramebufferRenderbuffer(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_RENDERBUFFER, renderColorbufferId);
-    ShaderUtil.checkGLError(TAG, "load render color buffers3");
 
     ShaderUtil.checkGLError(TAG, "load render color buffers");
 
@@ -243,37 +208,23 @@ public class MaskRenderer {
 
     GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, renderStencilbufferId);
 
-    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_DEPTH_COMPONENT16,  m_viewport[2],  m_viewport[3]);
+    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_DEPTH_COMPONENT16, width, height);
 
     GLES20.glFramebufferRenderbuffer(GLES20.GL_FRAMEBUFFER, GLES20.GL_DEPTH_ATTACHMENT, GLES20.GL_RENDERBUFFER, renderStencilbufferId);
 
     ShaderUtil.checkGLError(TAG, "load render stencil buffers");
 
 
-
     GLES20.glGenFramebuffers(1,fbo,0);
-
-    ShaderUtil.checkGLError(TAG, "4");
     GLES20.glGenRenderbuffers(1,render_buf, 0);
-
-    ShaderUtil.checkGLError(TAG, "4");
     GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, render_buf[0]);
-
-    ShaderUtil.checkGLError(TAG, "4");
-    //GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_BGRA8 ,m_viewport[2], m_viewport[3]);
-    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_RGBA4,m_viewport[2], m_viewport[3]);
-
-    ShaderUtil.checkGLError(TAG, "4");
+    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_RGBA4, width, height);
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,fbo[0]);
-
-    ShaderUtil.checkGLError(TAG, "4");
     GLES20.glFramebufferRenderbuffer(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_RENDERBUFFER, render_buf[0]);
 
-    ShaderUtil.checkGLError(TAG, "4");
-//At deinit:
+    //At deinit:
     //glDeleteFramebuffers(1,&fbo);
     //glDeleteRenderbuffers(1,&render_buf);
-
 
     ShaderUtil.checkGLError(TAG, "OBJ buffer load");
 
@@ -299,29 +250,11 @@ public class MaskRenderer {
       GLES20.glUniform1f(colorUniform, 0.0f);
     }
     positionAttribute = GLES20.glGetAttribLocation(program, "a_Position");
-    //normalAttribute = GLES20.glGetAttribLocation(program, "a_Normal");
-    //texCoordAttribute = GLES20.glGetAttribLocation(program, "a_TexCoord");
-
-    //textureUniform = GLES20.glGetUniformLocation(program, "u_Texture");
-
-    //lightingParametersUniform = GLES20.glGetUniformLocation(program, "u_LightingParameters");
-    //materialParametersUniform = GLES20.glGetUniformLocation(program, "u_MaterialParameters");
-
     ShaderUtil.checkGLError(TAG, "Program parameters");
 
     Matrix.setIdentityM(modelMatrix, 0);
   }
 
-  /**
-   * Selects the blending mode for rendering.
-   *
-   * @param blendMode The blending mode. Null indicates no blending (opaque rendering).
-   */
-  /*
-  public void setBlendMode(BlendMode blendMode) {
-    this.blendMode = blendMode;
-  }
-  */
   /**
    * Updates the object model matrix and applies scaling.
    *
@@ -339,24 +272,6 @@ public class MaskRenderer {
   }
 
   /**
-   * Sets the surface characteristics of the rendered model.
-   *
-   * @param ambient Intensity of non-directional surface illumination.
-   * @param diffuse Diffuse (matte) surface reflectivity.
-   * @param specular Specular (shiny) surface reflectivity.
-   * @param specularPower Surface shininess. Larger values result in a smaller, sharper specular
-   *     highlight.
-   */
-  /*
-  public void setMaterialProperties(
-      float ambient, float diffuse, float specular, float specularPower) {
-    this.ambient = ambient;
-    this.diffuse = diffuse;
-    this.specular = specular;
-    this.specularPower = specularPower;
-  }*/
-
-  /**
    * Draws the model.
    *
    * @param cameraView A 4x4 view matrix, in column-major order.
@@ -368,7 +283,7 @@ public class MaskRenderer {
    * @see # setMaterialProperties(float, float, float, float)
    * @see Matrix
    */
-  public void draw(float[] cameraView, float[] cameraPerspective, int objectId, HelloArActivity context) {
+  public void draw(float[] cameraView, float[] cameraPerspective, int objectId) {
 
     ShaderUtil.checkGLError(TAG, "Before draw");
 
@@ -378,195 +293,70 @@ public class MaskRenderer {
     Matrix.multiplyMM(modelViewProjectionMatrix, 0, cameraPerspective, 0, modelViewMatrix, 0);
 
     GLES20.glUseProgram(program);
-    ShaderUtil.checkGLError(TAG, "1");
-
-    // Set the lighting environment properties.
-    //Matrix.multiplyMV(viewLightDirection, 0, modelViewMatrix, 0, LIGHT_DIRECTION, 0);
-    //normalizeVec3(viewLightDirection);
-    /*GLES20.glUniform4f(
-        lightingParametersUniform,
-        viewLightDirection[0],
-        viewLightDirection[1],
-        viewLightDirection[2],
-        lightIntensity);
-    */
-    // Set the object material properties.
-    //GLES20.glUniform4f(materialParametersUniform, ambient, diffuse, specular, specularPower);
-
-    // Attach the object texture.
-    //GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    //GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
-    //GLES20.glUniform1i(textureUniform, 0);
 
     // Set the vertex attributes.
     GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBufferId);
-    ShaderUtil.checkGLError(TAG, "1");
 
     GLES20.glVertexAttribPointer(positionAttribute, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, verticesBaseAddress);
-    ShaderUtil.checkGLError(TAG, "1");
-    //GLES20.glVertexAttribPointer(code, COORDS_PER_VERTEX, GLES20.GL_INT, true, 0, verticesBaseAddress);
-    //GLES20.glVertexAttribPointer(normalAttribute, 3, GLES20.GL_FLOAT, false, 0, normalsBaseAddress);
-    //GLES20.glVertexAttribPointer(texCoordAttribute, 2, GLES20.GL_FLOAT, false, 0, texCoordsBaseAddress);
-
-    ShaderUtil.checkGLError(TAG, "1");
-
     GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-    ShaderUtil.checkGLError(TAG, "1");
 
     // Set the ModelViewProjection matrix in the shader.
     GLES20.glUniformMatrix4fv(modelViewUniform, 1, false, modelViewMatrix, 0);
-    ShaderUtil.checkGLError(TAG, "1");
     GLES20.glUniformMatrix4fv(modelViewProjectionUniform, 1, false, modelViewProjectionMatrix, 0);
-    ShaderUtil.checkGLError(TAG, "1");
-    float tmpF = ((float)((objectId/20.0)));
-    GLES20.glUniform1f(colorUniform,tmpF);
+    GLES20.glUniform1f(colorUniform, ((float)((objectId/MAX_MASKED_OBJECTS))));
 
-   //
-    ShaderUtil.checkGLError(TAG, "1");
     // Enable vertex arrays
     GLES20.glEnableVertexAttribArray(positionAttribute);
-    //GLES20.glEnableVertexAttribArray(normalAttribute);
-    //GLES20.glEnableVertexAttribArray(texCoordAttribute);
-
-    /*
-    if (blendMode != null) {
-      GLES20.glDepthMask(false);
-      GLES20.glEnable(GLES20.GL_BLEND);
-      switch (blendMode) {
-        case Shadow:
-          // Multiplicative blending function for Shadow.
-          GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-          break;
-        case Grid:
-          // Grid, additive blending function.
-          GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-          break;
-      }
-    }*/
-    ShaderUtil.checkGLError(TAG, "1");
 
     GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
-    ShaderUtil.checkGLError(TAG, "2");
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebufferId);
-    //GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, renderColorbufferId);
     ShaderUtil.checkGLError(TAG, "load render color buffers1");
 
-    //GLES20.glRenderbufferStorage()
-    //GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, renderbufferId);
-    ShaderUtil.checkGLError(TAG, "3");
+    loadViewport();
 
-    int [] m_viewport = new int[4];
-    GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, m_viewport, 0 );
-    int width = m_viewport[2];
-    int height = m_viewport[3];
-
-    ShaderUtil.checkGLError(TAG, "4");
-//Before drawing
+    //Before drawing
     GLES20.glBindFramebuffer( GLES20.GL_FRAMEBUFFER,fbo[0]);
-//after drawing
-    ShaderUtil.checkGLError(TAG, "4");
+    //after drawing
 
-
-
-    //GLES20.glEnable(GLES20.GL_BLEND);
-    //GLES20.glBlendFunc(GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-
-
-    // Start by clearing the alpha channel of the color buffer to 1.0.
-    //GLES20.glClearColor(1, 1, 1, 1);
-    //GLES20.glColorMask(false, false, false, true);
-    //GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-    //GLES20.glColorMask(false, true, true, true);
     GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_SHORT, 0);
     GLES20.glDisable(GLES20.GL_BLEND);
 
-    ShaderUtil.checkGLError(TAG, "4");
-    //GLES20.std::vector<std::uint8_t> data(width*height*4);
-    //GLES20.glReadBuffer( GLES20.GL_COLOR_ATTACHMENT0);
-    //byte [] data = new byte[width*height*4];
-   /* Buffer data = CharBuffer.allocate(width*height*4);
-
-    ShaderUtil.checkGLError(TAG, "4");
-    // https://stackoverflow.com/questions/20606295/when-using-gles20-glreadpixels-on-android-the-data-returned-by-it-is-not-exactl
-    int b[]=new int[width*height];
-    int bt[]=new int[width*height*4];
-    IntBuffer ib = IntBuffer.wrap(b);
-    ib.position(0);
-
-    GLES20.glReadPixels(0,0,width,height, GLES20.GL_RGBA4, GLES20.GL_UNSIGNED_BYTE,ib);
-// Return to onscreen rendering:
-
-*/
-  // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
-    ByteBuffer buffer = ByteBuffer.allocateDirect(width*height * 4);
-    GLES20.glReadPixels(0, 0, width,height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer);
-    ShaderUtil.checkGLError(TAG, "4");
-
-    Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-    ShaderUtil.checkGLError(TAG, "4");
-
-    bmp.copyPixelsFromBuffer(buffer);
-    ShaderUtil.checkGLError(TAG, "4");
-
-    if (Build.VERSION.SDK_INT >= 23) {
-      int permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE);
-      if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
-        ActivityCompat.requestPermissions(context, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
-      }
-    }
-
-    FileOutputStream out = null;
-    try {
-
-      File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
-      String fname = "TestBitmap.jpg";
-      //File file = new File(path, "/" + fname);
-      File file = new File(path, "/" + fname);
-
-      Log.i("image", file .getAbsolutePath());
-
-      out = new FileOutputStream(file);
-      bmp.compress(Bitmap.CompressFormat.JPEG, 100, out); // bmp is your Bitmap instance
-      // PNG is a lossless format, the compression factor (100) is ignored
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      try {
-        if (out != null) {
-          out.close();
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-
-
-
-
-    ShaderUtil.checkGLError(TAG, "4");
     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
     GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    ShaderUtil.checkGLError(TAG, "5");
-    /*if (blendMode != null) {
-      GLES20.glDisable(GLES20.GL_BLEND);
-      GLES20.glDepthMask(true);
-    }*/
-
     // Disable vertex arrays
     GLES20.glDisableVertexAttribArray(positionAttribute);
-    //GLES20.glDisableVertexAttribArray(normalAttribute);
-    //GLES20.glDisableVertexAttribArray(texCoordAttribute);
-
-    //GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 
     ShaderUtil.checkGLError(TAG, "After draw");
   }
 
-  private static void normalizeVec3(float[] v) {
-    float reciprocalLength = 1.0f / (float) Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    v[0] *= reciprocalLength;
-    v[1] *= reciprocalLength;
-    v[2] *= reciprocalLength;
+  public void loadMaskBuffer(){
+    loadViewport();
+    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebufferId);
+    ShaderUtil.checkGLError(TAG, "load render color buffers1");
+
+    //Before drawing
+    GLES20.glBindFramebuffer( GLES20.GL_FRAMEBUFFER,fbo[0]);
+    //after drawing
+
+    GLES20.glDisable(GLES20.GL_BLEND);
+    loadViewport();
+    // https://www.programcreek.com/java-api-examples/?class=android.opengl.GLES20&method=glReadPixels
+    // ByteBuffer init was not working in createOnGlThread
+
+    if(resultsBuffer == null)
+      resultsBuffer = ByteBuffer.allocateDirect(width *height * 4);
+    GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, resultsBuffer);
+
+    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
+    GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    // Disable vertex arrays
+    GLES20.glDisableVertexAttribArray(positionAttribute);
+
+    ShaderUtil.checkGLError(TAG, "After draw");
   }
+
+
 }
